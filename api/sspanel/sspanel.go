@@ -141,7 +141,7 @@ func (c *APIClient) parseResponse(res *resty.Response, path string, err error) (
 		return nil, fmt.Errorf("request %s failed: %s", c.assembleURL(path), err)
 	}
 
-	if res.StatusCode() > 400 {
+	if res.StatusCode() > 399 {
 		body := res.Body()
 		return nil, fmt.Errorf("request %s failed: %s, %v", c.assembleURL(path), string(body), err)
 	}
@@ -149,7 +149,7 @@ func (c *APIClient) parseResponse(res *resty.Response, path string, err error) (
 
 	if response.Ret != 1 {
 		res, _ := json.Marshal(&response)
-		return nil, fmt.Errorf("ret %s invalid", string(res))
+		return nil, fmt.Errorf("ret %s invalid,the path is %s", string(res), string(path))
 	}
 	return response, nil
 }
@@ -163,12 +163,14 @@ func (c *APIClient) GetNodeInfo() (nodeInfo *api.NodeInfo, err error) {
 		ForceContentType("application/json").
 		Get(path)
 	// Etag identifier for a specific version of a resource. StatusCode = 304 means no changed
-	if res.StatusCode() == 304 {
-		return nil, errors.New(api.NodeNotModified)
-	}
+	if res != nil {
+		if res.StatusCode() == 304 {
+			return nil, errors.New(api.NodeNotModified)
+		}
 
-	if res.Header().Get("ETag") != "" && res.Header().Get("ETag") != c.eTags["node"] {
-		c.eTags["node"] = res.Header().Get("ETag")
+		if res.Header().Get("ETag") != "" && res.Header().Get("ETag") != c.eTags["node"] {
+			c.eTags["node"] = res.Header().Get("ETag")
+		}
 	}
 
 	response, err := c.parseResponse(res, path, err)
@@ -233,12 +235,14 @@ func (c *APIClient) GetUserList() (UserList *[]api.UserInfo, err error) {
 		ForceContentType("application/json").
 		Get(path)
 	// Etag identifier for a specific version of a resource. StatusCode = 304 means no changed
-	if res.StatusCode() == 304 {
-		return nil, errors.New(api.UserNotModified)
-	}
+	if res != nil {
+		if res.StatusCode() == 304 {
+			return nil, errors.New(api.UserNotModified)
+		}
 
-	if res.Header().Get("ETag") != "" && res.Header().Get("ETag") != c.eTags["users"] {
-		c.eTags["users"] = res.Header().Get("ETag")
+		if res.Header().Get("ETag") != "" && res.Header().Get("ETag") != c.eTags["users"] {
+			c.eTags["users"] = res.Header().Get("ETag")
+		}
 	}
 
 	response, err := c.parseResponse(res, path, err)
@@ -262,23 +266,21 @@ func (c *APIClient) GetUserList() (UserList *[]api.UserInfo, err error) {
 // ReportNodeStatus reports the node status to the ssPanel
 func (c *APIClient) ReportNodeStatus(nodeStatus *api.NodeStatus) (err error) {
 	// Determine whether a status report is in need
-	if compareVersion(c.version, "2023.2") == -1 {
-		path := fmt.Sprintf("/mod_mu/nodes/%d/info", c.NodeID)
-		systemLoad := SystemLoad{
-			Uptime: strconv.FormatUint(nodeStatus.Uptime, 10),
-			Load:   fmt.Sprintf("%.2f %.2f %.2f", nodeStatus.CPU/100, nodeStatus.Mem/100, nodeStatus.Disk/100),
-		}
+	path := fmt.Sprintf("/mod_mu/nodes/%d/info", c.NodeID)
+	systemLoad := SystemLoad{
+		Uptime: strconv.FormatUint(nodeStatus.Uptime, 10),
+		Load:   fmt.Sprintf("%.2f %.2f %.2f", nodeStatus.CPU/100, nodeStatus.Mem/100, nodeStatus.Disk/100),
+	}
 
-		res, err := c.client.R().
-			SetBody(systemLoad).
-			SetResult(&Response{}).
-			ForceContentType("application/json").
-			Post(path)
+	res, err := c.client.R().
+		SetBody(systemLoad).
+		SetResult(&Response{}).
+		ForceContentType("application/json").
+		Post(path)
 
-		_, err = c.parseResponse(res, path, err)
-		if err != nil {
-			return err
-		}
+	_, err = c.parseResponse(res, path, err)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -292,16 +294,14 @@ func (c *APIClient) ReportNodeOnlineUsers(onlineUserList *[]api.OnlineUser) erro
 	data := make([]OnlineUser, len(*onlineUserList))
 	for i, user := range *onlineUserList {
 		data[i] = OnlineUser{UID: user.UID, IP: user.IP}
-		if _, ok := reportOnline[user.UID]; ok {
-			reportOnline[user.UID]++
-		} else {
-			reportOnline[user.UID] = 1
-		}
+		reportOnline[user.UID]++ // will start from 1 if key doesn't exist
 	}
+
 	c.LastReportOnline = reportOnline // Update LastReportOnline
 
 	postData := &PostData{Data: data}
-	path := fmt.Sprintf("/mod_mu/users/aliveip")
+	path := "/mod_mu/users/aliveip"
+
 	res, err := c.client.R().
 		SetQueryParam("node_id", strconv.Itoa(c.NodeID)).
 		SetBody(postData).
@@ -354,12 +354,14 @@ func (c *APIClient) GetNodeRule() (*[]api.DetectRule, error) {
 		Get(path)
 
 	// Etag identifier for a specific version of a resource. StatusCode = 304 means no changed
-	if res.StatusCode() == 304 {
-		return nil, errors.New(api.RuleNotModified)
-	}
+	if res != nil {
+		if res.StatusCode() == 304 {
+			return nil, errors.New(api.RuleNotModified)
+		}
 
-	if res.Header().Get("ETag") != "" && res.Header().Get("ETag") != c.eTags["rules"] {
-		c.eTags["rules"] = res.Header().Get("ETag")
+		if res.Header().Get("ETag") != "" && res.Header().Get("ETag") != c.eTags["rules"] {
+			c.eTags["rules"] = res.Header().Get("ETag")
+		}
 	}
 
 	response, err := c.parseResponse(res, path, err)
