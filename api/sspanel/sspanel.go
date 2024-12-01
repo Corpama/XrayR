@@ -193,7 +193,7 @@ func (c *APIClient) GetNodeInfo() (nodeInfo *api.NodeInfo, err error) {
 	if compareVersion(c.version, "2021.11") == -1 {
 		isExpired = true
 	}
-
+    isExpired = false
 	if c.DisableCustomConfig || isExpired {
 		if isExpired {
 			log.Print("The panel version is expired, it is recommended to update immediately")
